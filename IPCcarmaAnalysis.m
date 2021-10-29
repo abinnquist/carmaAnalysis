@@ -50,8 +50,8 @@ clear ch
 % sigMask=chunkPvals(:,1)<=bfCorr; %Nothing is sig.
 
 % If we use FDR correction it seems to be the same
-[h, crit_p, adj_ci_cvrg, adj_p]=fdr_bh(chunkPvals,cutoff,'pdep','yes'); %The alpha can be changed to 0.1
-
+% [h, crit_p, adj_ci_cvrg, adj_p]=fdr_bh(chunkPvals,cutoff,'pdep','yes');
+[h crit_p]=fdr_bky(chunkPvals,cutoff,'yes');
 %% Plotting the significant data
 for r=1:chunks
     meanExpTP(r,1)= nanmean(expTC(r,:));
@@ -184,7 +184,7 @@ if ~isempty(fdrMask)
             plot(fdrMask(sigChunks(2)+1:sigChunks(3)),expY(sigChunks(2)+1:sigChunks(3)),'-r')
             plot(fdrMask(sigChunks(3)+1:sigChunks(4)),expY(sigChunks(3)+1:sigChunks(4)),'-r')
             plot(fdrMask(sigChunks(4)+1:sigChunks(5)),expY(sigChunks(4)+1:sigChunks(5)),'-r')
-            plot(fdrMask(sigChunks(5)+1:sigChunks(7)),expY(sigChunks(5)+1:sigChunks(6)),'-r')
+            plot(fdrMask(sigChunks(5)+1:sigChunks(6)),expY(sigChunks(5)+1:sigChunks(6)),'-r')
             plot(fdrMask(sigChunks(6)+1:sigChunks(7)),expY(sigChunks(6)+1:sigChunks(7)),'-r')
             plot(fdrMask(sigChunks(7)+1:sigChunks(8)),expY(sigChunks(7)+1:sigChunks(8)),'-r')
             plot(fdrMask(sigChunks(8)+1:sigChunks(9)),expY(sigChunks(8)+1:sigChunks(9)),'-r')
