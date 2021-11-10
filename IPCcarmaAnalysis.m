@@ -1,8 +1,8 @@
-%% Carma vidoe analysis
+%% Carma video analysis
 % Note: for trimming (i.e. trimvid) your n will shrink as you go above 600s
 %% Properties that can be changed for trimming, time averaging, and fdr cutoff
 time2condense=1; %Amount of time you want to average, make sure it is divisible by the trim time.
-trimvid=800; %Specified time at which to trim for analysis.
+trimvid=900; %Specified time at which to trim for analysis.
 cutoff=0.05;
 
 load('carmaMeans.mat') %Might need to specify location if not in cd
@@ -20,6 +20,10 @@ for v=1:61
     timeCourses(1:lenVid,v)=carmaTimecourses{1:lenVid,v};
 end
 clear lenVid v
+
+%To create a csv of just the averaged timecourses for each video
+TCtable=writecarmacsv(timeCourses,controlExp);
+writetable(TCtable,'carmaTC.csv') 
 
 timeCourses=timeCourses(1:trimvid,:); %trim the timecourses  
 
@@ -203,6 +207,9 @@ else
     disp('No significant chunks of time')
 end
 
+legend('Private','Public','Sig. Difference')
+xlabel('Time (s)')
+ylabel('Conflict (-100 to 100)')
 %% Manually plot    
 % plot(meanConTP,'--', 'Color',[0, 0.4470, 0.7410])
 % hold
