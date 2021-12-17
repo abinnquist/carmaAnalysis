@@ -1,91 +1,78 @@
 %% Carma video analysis
 % Note: for trimming (i.e. trimvid) your n will shrink as you go above 600s
-clear
-close all
+carmaPath=uigetdir('','Choose Data Directory');
+
 %% Properties that can be changed for trimming, time averaging, and fdr cutoff
-time2condense=1; %Amount of time you want to average, make sure it is divisible by the trim time.
+numConvos=61;
 trimvid=900; %Specified time at which to trim for analysis.
 cutoff=0.05;
+time2condense=10; %Amount of time you want to average, make sure it's divisible by trim time.
 
-% Set to nonzero p value to forego multiple corrections fix
 overrideH = 0.0;
-medianSplit=0;
-halves=0;
 conflictSort=4;
 
-%Load in external data
-load('carmaMeans.mat') %Might need to specify location if not in cd
-filename = 'IPCdata_complete.csv';
-opts = detectImportOptions(filename);
-opts = setvartype(opts, 'group', 'char');  %or 'string' if you prefer
-data = readtable(filename, opts);
+%% Analyses to perform
+condense=0;         % If you want to average chunks of time instead of each time point
+halves=1;           % Compare the first half of the conversation to the second
+medianSplit=0;
+
+%% Load in external data 
+load(strcat(carmaPath,filesep,'carmaMeans.mat'))
+IPCdata=readtable(strcat(carmaPath,filesep,'IPCdata_complete.csv'));
 
 %% Compile and average carma data
-%To get an idea of the length of all the videos
-% for i=1:61
-%     timeLen(i,1) = length(carmaTimecourses{1,i});
-% end
-% timeLen=sort(timeLen);
-
 timeCourses=nan(1163,61); %Needs to be the length of the longest video or analysis will be incorrect
 for v=1:61
     lenVid=length(carmaTimecourses{1,v});
     timeCourses(1:lenVid,v)=carmaTimecourses{1:lenVid,v};
 end
-clear lenVid v
 
-%To create a csv of just the averaged timecourses for each video
-% TCtable=writecarmacsv(timeCourses,controlExp);
-% writetable(TCtable,'carmaTC.csv') 
+%trim the timecourses  
+timeChunk=timeCourses(1:trimvid,:); 
 
-timeCourses=timeCourses(1:trimvid,:); %trim the timecourses  
-
-%For comparing chunks of time
-startCut=1;  
-endCut=time2condense;
-chunks=length(timeCourses)/time2condense;
-for c=1:chunks
-    for v=1:61
-        timeChunk(c,v)=mean(timeCourses(startCut:endCut,v));
+if condense
+    %For comparing chunks of time
+    startCut=1;  
+    endCut=time2condense;
+    chunks=length(timeCourses)/time2condense;
+    for c=1:chunks
+        for v=1:numConvos
+            timeChunk(c,v)=mean(timeCourses(startCut:endCut,v));
+        end
+        startCut=startCut+time2condense; 
+        endCut=endCut+time2condense;
     end
-    startCut=startCut+time2condense; 
-    endCut=endCut+time2condense;
+    clear startCut endCut v c time2condense
 end
-clear startCut endCut v c time2condense trimvid
 
 controlTC=timeChunk(:,controlExp.experimental(:)==0);
 expTC=timeChunk(:,controlExp.experimental(:)==1);
 
-%% t-test between first 450 and last 450 seconds
+%% t-test between first half and last half of the conversation
 % Meaning into a single timecourse first, then doing analysis
 if halves
     avgTimecourse = mean(timeChunk,2,'omitnan');
-    first450 = avgTimecourse(1:450);
-    last450 = avgTimecourse(451:end);
+    firsthalf = avgTimecourse(1:trimvid/2);
+    lasthalf = avgTimecourse((trimvid/2)+1:end);
 
     f = categorical({'First Half','Second Half'}); % Predefine this for easier plotting
     f = reordercats(f,{'First Half','Second Half'});
-    a = first450;
-    b = last450;
-    [~, p, ~, stats] = ttest2(a, b)
+    [~, p, ~, stats] = ttest2(firsthalf, lasthalf)
     figure()
-    [t, mean_a, mean_b, se_a, se_b] = ttest2_barplot(a,b,f);
+    [t, mean_a, mean_b, se_a, se_b] = ttest2_barplot(firsthalf,lasthalf,f);
     ylabel('Conflict')
 
-
     % Using all datapoints for all timecourses
-    first450All = reshape(timeChunk(1:450,:),1,[]);
-    last450All = reshape(timeChunk(451:end,:),1,[]);
+    firstAll = reshape(timeChunk(1:trimvid/2,:),1,[]);
+    lastAll = reshape(timeChunk((trimvid/2)+1:end,:),1,[]);
 
-    a = first450All;
-    b = last450All;
-    [~, p, ~, stats] = ttest2(a, b)
+    [~, p, ~, stats] = ttest2(firstAll, lastAll)
     figure()
-    [t, mean_a, mean_b, se_a, se_b] = ttest2_barplot(a,b,f);
+    [t, mean_a, mean_b, se_a, se_b] = ttest2_barplot(firstAll,lastAll,f);
     ylabel('Conflict')
 end
 
-%% Median split of first 450 last 450 (2-way ANOVA)
+%% Median split of first half last half (2-way ANOVA)
 if medianSplit
     first450SplitCon = mean(controlTC(1:450,:));
     first450SplitExp = mean(expTC(1:450,:));
