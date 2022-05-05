@@ -103,7 +103,7 @@ if medianSplit
 end
 
 %% t-test between conditions for each timepoint
-for ch=1:chunks
+for ch=1:trimvid
     [~,chunkPvals(ch,1),~,chunkStats(ch,:)] =ttest2(controlTC(ch,:),expTC(ch,:),'Vartype','unequal');  
 end
 clear ch
@@ -118,7 +118,7 @@ clear ch
 [h crit_p]=fdr_bky(chunkPvals,cutoff,'yes');
 
 %To find significant chunks of time
-for r=1:chunks
+for r=1:trimvid
     meanExpTP(r,1)= nanmean(expTC(r,:));
     meanConTP(r,1)=nanmean(controlTC(r,:));
 end
@@ -126,6 +126,18 @@ clear r
 fdrMask=find(h==1); %Timepoints (i.e., rows that are sig.)
 
 %% Rearrange dataframe by group, rather than by participant ("halve" the data)
+filename = 'IPCdata_complete.csv';
+opts = detectImportOptions(filename);
+opts = setvartype(opts, 'group', 'char');  %or 'string' if you prefer
+data = readtable(filename, opts);
+
+isExp = logical(data.experimental);
+transformPartner = data.transformPartner;
+hasConf = data.conf;
+
+expData = data(isExp,:);
+controlData = data(~isExp,:);
+
 data1 = data(1:61,:);
 data2 = data(62:122,:);
 
@@ -251,7 +263,7 @@ for i = 1:(length(fdrMask)-1) % shade in significant areas (4 x/y coordinates)
 end
 xline(450,'--k','LineWidth', 2)
 legend([p1 p2],'Public','Private','Location','northwest')
-ylabel('(Low)               Conflict               (High)','fontsize',14,'Position',[-70 -20 -1])
+ylabel('Friendly               Neutral               Conflict','fontsize',14,'Position',[-70 -20 -1])
 xlabel('Time (s)','fontsize',14)
 
 % Plot Highest and lowest conflict convos
@@ -266,7 +278,7 @@ for i = 1:size(curTimecourses,2)
 %     pr{i} = plot(curTimecourses(1:900,i),'-', 'Color', cmap2(i,:), 'LineWidth', .8);
 end
 ylim([-100,100]);
-ylabel('(Low)               Conflict               (High)','fontsize',14,'Position',[-88 -.000095 -1])
+ylabel('Friendly               Neutral               Conflict','fontsize',14,'Position',[-88 -.000095 -1])
 xlabel('Time (s)','fontsize',14)
 yline(0,'--'); % Plot line at 0
 annotation('doublearrow',[.06 .06],[.1,.93], 'LineWidth',1);
