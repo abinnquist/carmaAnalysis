@@ -1,25 +1,13 @@
 %% Carma video analysis
-% Note: for trimming (i.e. trimvid) your n will shrink as you go above 600s
-carmaPath=uigetdir('','Choose Data Directory');
-
-%% Properties that can be changed for trimming, time averaging, and fdr cutoff
-numConvos=61;
-trimvid=900; %Specified time at which to trim for analysis.
-cutoff=0.05;
-time2condense=10; %Amount of time you want to average, make sure it's divisible by trim time.
-
-overrideH = 0.0;
-conflictSort=4;
-
-%% Analyses to perform
-condense=0;         % If you want to average chunks of time instead of each time point
-halves=1;           % Compare the first half of the conversation to the second
-medianSplit=0;
+% Make sure to run from the 'carmaAnalysis' folder that has helper scripts
+% and data (carmaMeans & IPCdata_complete) stored in it. 
 
 %% Load in external data 
-load(strcat(carmaPath,filesep,'carmaMeans.mat'))
-IPCdata=readtable(strcat(carmaPath,filesep,'IPCdata_complete.csv'));
+carmaPath=cd; 
+load(strcat(carmaPath,filesep,'carmaConvos.mat'))
 
+trimvid=900; %Specified time at which to trim for analysis (some conversations ran longer).
+cutoff=0.05; %FDR cutoff
 %% Compile and average carma data
 timeCourses=nan(1163,61); %Needs to be the length of the longest video or analysis will be incorrect
 for v=1:61
@@ -29,78 +17,8 @@ end
 
 %trim the timecourses  
 timeChunk=timeCourses(1:trimvid,:); 
-
-if condense
-    %For comparing chunks of time
-    startCut=1;  
-    endCut=time2condense;
-    chunks=length(timeCourses)/time2condense;
-    for c=1:chunks
-        for v=1:numConvos
-            timeChunk(c,v)=mean(timeCourses(startCut:endCut,v));
-        end
-        startCut=startCut+time2condense; 
-        endCut=endCut+time2condense;
-    end
-    clear startCut endCut v c time2condense
-end
-
 controlTC=timeChunk(:,controlExp.experimental(:)==0);
 expTC=timeChunk(:,controlExp.experimental(:)==1);
-
-%% t-test between first half and last half of the conversation
-% Meaning into a single timecourse first, then doing analysis
-if halves
-    avgTimecourse = mean(timeChunk,2,'omitnan');
-    firsthalf = avgTimecourse(1:trimvid/2);
-    lasthalf = avgTimecourse((trimvid/2)+1:end);
-
-    f = categorical({'First Half','Second Half'}); % Predefine this for easier plotting
-    f = reordercats(f,{'First Half','Second Half'});
-    [~, p, ~, stats] = ttest2(firsthalf, lasthalf)
-    figure()
-    [t, mean_a, mean_b, se_a, se_b] = ttest2_barplot(firsthalf,lasthalf,f);
-    ylabel('Conflict')
-
-    % Using all datapoints for all timecourses
-    firstAll = reshape(timeChunk(1:trimvid/2,:),1,[]);
-    lastAll = reshape(timeChunk((trimvid/2)+1:end,:),1,[]);
-
-    [~, p, ~, stats] = ttest2(firstAll, lastAll)
-    figure()
-    [t, mean_a, mean_b, se_a, se_b] = ttest2_barplot(firstAll,lastAll,f);
-    ylabel('Conflict')
-end
-
-%% Median split of first half last half (2-way ANOVA)
-if medianSplit
-    first450SplitCon = mean(controlTC(1:450,:));
-    first450SplitExp = mean(expTC(1:450,:));
-    last450SplitCon = mean(controlTC(451:end,:));
-    last450SplitExp = mean(expTC(451:end,:));
-    anovaSplit = [first450SplitCon first450SplitExp last450SplitCon last450SplitExp];
-    groupFirst = [repmat({'First'},1,length(first450SplitCon)) repmat({'First'},1,length(first450SplitExp))...
-         repmat({'Second'},1,length(last450SplitCon)) repmat({'Second'},1,length(last450SplitExp))];
-    groupCondition = [repmat({'Private'},1,length(first450SplitCon)) repmat({'Public'},1,length(first450SplitExp))...
-         repmat({'Private'},1,length(last450SplitCon)) repmat({'Public'},1,length(last450SplitExp))];
-    [p, tbl, stats, terms] = anovan(anovaSplit, {groupFirst, groupCondition}, 'model', 'interaction', 'varnames', {'First', 'Condition'});
-
-    figure()
-    subplot(1,2,1)
-    a = first450SplitExp;
-    b = last450SplitExp;
-    [t, mean_a, mean_b, se_a, se_b] = ttest2_barplot(a,b,f);
-    ylabel('Conflict')
-    xlabel('Public')
-    ylim([-100 100])
-    subplot(1,2,2)
-    a = first450SplitCon;
-    b = last450SplitCon;
-    [t, mean_a, mean_b, se_a, se_b] = ttest2_barplot(a,b,f);
-    ylabel('Conflict')
-    xlabel('Private')
-    ylim([-100 100])
-end
 
 %% t-test between conditions for each timepoint
 for ch=1:trimvid
@@ -109,13 +27,9 @@ end
 clear ch
 
 %% Multiple comparisons correction
-% If we use Bonferroni here it is overly strict 0.05/chunks=sig. cutoff
-% bfCorr=0.05/chunks;
-% sigMask=chunkPvals(:,1)<=bfCorr; %Nothing is sig.
-
-% If we use the classic FDR correction
-% [h, crit_p, adj_ci_cvrg, adj_p]=fdr_bh(chunkPvals,cutoff,'pdep','yes');
-[h crit_p]=fdr_bky(chunkPvals,cutoff,'yes');
+% you can change the output to get the critical p-val if wanted
+% FDR correction (crit_p=0.0182)
+[h, ~]=fdr_bky(chunkPvals,cutoff,'yes');
 
 %To find significant chunks of time
 for r=1:trimvid
@@ -125,16 +39,65 @@ end
 clear r
 fdrMask=find(h==1); %Timepoints (i.e., rows that are sig.)
 
+%Outputs the first timepoint for a sig. period of time longer than 10 seconds
+count=1;
+for i=1:length(fdrMask)
+    if diff(fdrMask(i:i+1))==1
+        count=count+1;
+        if count > 10
+            startCh=fdrMask(i-9,1);
+            pval=chunkPvals(startCh);
+            fprintf('Significant chunk of time starting at time: %d(s), p = %.3f \n',startCh,pval)
+            break
+        end
+    else
+        count=1;
+    end
+end
+clearvars count v i lenVid cutoff
+
+%% t-Test between condition X first/second half  
+% Will output the t-stat & p-val for the first and second half of the
+% conversations for difference of condition.
+a = nanmean(controlTC(1:450,:)); b = nanmean(expTC(1:450,:));
+c = nanmean(controlTC(451:900,:)); d = nanmean(expTC(451:900,:));
+%e = nanmean(controlTC(1:900,:)); f = nanmean(expTC(1:900,:));
+
+[~,pvalsHalf(1,1),~,halfStats(1,:)] =ttest2(a,b,'Vartype','unequal'); 
+[~,pvalsHalf(2,1),~,halfStats(2,:)] =ttest2(c,d,'Vartype','unequal'); 
+%[~,pvalsHalf(3,1),~,halfStats(3,:)] =ttest2(e,f,'Vartype','unequal'); 
+
+for t=1:2
+    n1=30; n2=31;
+    if t==1
+        m1=nanmean(a); m2=nanmean(b);s1=nanvar(a); s2=nanvar(b);   
+    else
+        m1=nanmean(c); m2=nanmean(d); s1=nanvar(c); s2=nanvar(d);   
+    end
+    pooledSD = sqrt((((n1-1)*s1) + ((n2-1)*s2))/(n1 + n2 - 2));
+    cohendHalf(t) = (m1-m2) / pooledSD;  
+end
+
+fprintf('Conflict in the public condition vs the private condition, first half (t = %.3f, p = %.3f, d = %.3f)\n',...
+    halfStats(1).tstat,pvalsHalf(1),cohendHalf(1))
+
+fprintf('Conflict in the public condition vs the private condition, second half (t = %.3f, p = %.3f, d = %.3f)\n',...
+    halfStats(2).tstat,pvalsHalf(2),cohendHalf(2))
+
+%% Average CARMA rating difference between conditions
+carmaMeans=nanmean(timeCourses(1:1163,:))';
+a = carmaMeans(controlExp.experimental == 1);
+b = carmaMeans(controlExp.experimental == 0);
+[~, p, ~, stats] = ttest2(a, b);
+
+fprintf('More conflict in the public condition vs the private condition (t = %.3f, p = %.3f)\n',stats.tstat,p)
+
 %% Rearrange dataframe by group, rather than by participant ("halve" the data)
-filename = 'IPCdata_complete.csv';
-opts = detectImportOptions(filename);
+opts = detectImportOptions('IPCdata_complete.csv');
 opts = setvartype(opts, 'group', 'char');  %or 'string' if you prefer
-data = readtable(filename, opts);
+data = readtable('IPCdata_complete.csv', opts);
 
 isExp = logical(data.experimental);
-transformPartner = data.transformPartner;
-hasConf = data.conf;
-
 expData = data(isExp,:);
 controlData = data(~isExp,:);
 
@@ -143,75 +106,32 @@ data2 = data(62:122,:);
 
 groupData = join(data1,data2, 'Keys', 'group');
 
-groupData.Opp_conflict_total = (groupData.Opp_conflict_data1 + groupData.Opp_conflict_data2)/2;
-groupData.conflict_total = (groupData.conflict_data1 + groupData.conflict_data2)/2;
-
 % Consolidate conflict data as wanted
-conflictData = table(groupData.group, groupData.experimental_data1,...
-    groupData.Opp_conflict_data1, groupData.Opp_conflict_data2, groupData.conflict_data1, groupData.conflict_data2,...
-    groupData.Opp_conflict_total, groupData.conflict_total, groupData.conflictBoth_data1,...
+conflictData = table(groupData.group, groupData.experimental_data1, groupData.conflictBoth_data1,...
     groupData.carmaMeans_data1);
-conflictData.Properties.VariableNames = {'group', 'experimental',...
-    'selfReport1', 'selfReport2', 'rater1', 'rater2', 'selfReportAvg', 'raterAvg', 'raterOverall', 'carmaMeans'};
+conflictData.Properties.VariableNames = {'group', 'experimental','raterOverall', 'carmaMeans'};
 
 %% Sort by highest conflict convos
 rankConflict = table(conflictData.group, conflictData.experimental);
 rankConflict.Properties.VariableNames = {'group', 'experimental'};
 rr = (1:height(rankConflict))';
 
-% Sort by self-report avg
-[conflictDataSorted_selfReport, rankSelfReportAvg] = sortrows(conflictData, [7,8], 'descend');
-rr(rankSelfReportAvg) = rr;
-rankConflict.rankSelfReportAvg = rr;
-rr = (1:height(rankConflict))';
-% Sort by rater avg
-[conflictDataSorted_rater, rankRaterAvg] = sortrows(conflictData, [8,7], 'descend');
-rr(rankRaterAvg) = rr;
-rankConflict.rankRaterAvg = rr;
-rr = (1:height(rankConflict))';
-% Sort by rater overall
-[conflictDataSorted_raterBoth, rankRaterBoth] = sortrows(conflictData, [9,10], 'descend');
-rr(rankRaterBoth) = rr;
-rankConflict.rankRaterBoth = rr;
-rr = (1:height(rankConflict))';
 % Sort by carma
-[conflictDataSorted_carmaMeans, rankCarmaMeans] = sortrows(conflictData, [10,9], 'descend');
+[conflictDataSorted_carmaMeans, rankCarmaMeans] = sortrows(conflictData, [4,3], 'descend');
 rr(rankCarmaMeans) = rr;
 rankConflict.rankCarmaMeans = rr;
 rr = (1:height(rankConflict))';
-
-% Average over all 4 ranked methods to determine "average rank"
-% Lower numbers are higher conflict convos
-rankConflict.totalRank = (rankConflict.rankSelfReportAvg + rankConflict.rankRaterAvg + ...
-    rankConflict.rankRaterBoth + rankConflict.rankCarmaMeans)/4;
-
-%% Choose which average you want conflict sorting to be based on 
-if conflictSort==1
-    rankConflict = sortrows(rankConflict, [7]); % Over total average rank
-elseif conflictSort==2  
-    rankConflict = sortrows(rankConflict, [3]); % Over self report ranks
-elseif conflictSort==3    
-    rankConflict = sortrows(rankConflict, [4]); % Over rater average rank
-elseif conflictSort==4
-    rankConflict = sortrows(rankConflict, [6]); % Over CARMA average rank
-elseif conflictSort==5
-    rankConflict = sortrows(rankConflict, [5]); % Over rater average rank (overall)
-end
+rankConflict = sortrows(rankConflict, [3]); % Over CARMA average rank
 
 %% Plot top conflict CARMA timecourses
-% Note to self - Convo 40 is wonky
 num = 5;
 topConflictConvos = rankConflict.group(1:num);
 topConflictExps = rankConflict.experimental(1:num);
 botConflictConvos = rankConflict.group(62-num:61);
 botConflictExps = rankConflict.experimental(62-num:61);
 
-% topConflictConvos = {'58B','40'};
-% topConflictExps = [0,1];
 carmaIndexer = controlExp.group;
 
-% figure()
-% hold on
 curTimecourses = nan(1163,num*2);
 for i = 1:length(topConflictConvos)
     curGroupHigh{i} = topConflictConvos{i}; % group to be plotted
@@ -224,11 +144,6 @@ for i = 1:length(topConflictConvos)
     idx = find(strcmp(carmaIndexer,curGroupHigh{i})); % find appropriate carma timecourse index
     curTimecourse = carmaTimecourses{idx};
     curTimecourses(1:length(carmaTimecourses{idx}),i) = carmaTimecourses{idx};
-%     if curExpHigh{i} == 1
-%         p1 = plot(curTimecourse,'-','Color', [1 0 0]);
-%     elseif curExpHigh{i}==0
-%         p2 = plot(curTimecourse,'-','Color', [0 0 1]);
-%     end
 end
 for i = 1:length(botConflictConvos)
     curGroupLow{i} = botConflictConvos{i}; % group to be plotted
@@ -241,11 +156,6 @@ for i = 1:length(botConflictConvos)
     idx = find(strcmp(carmaIndexer,curGroupLow{i})); % find appropriate carma timecourse index
     curTimecourse = carmaTimecourses{idx};
     curTimecourses(1:length(carmaTimecourses{idx}),i+num) = carmaTimecourses{idx};
-%     if curExpLow{i} == 1
-%         p3 = plot(curTimecourse,'-','Color', [1 .5 .5]);
-%     elseif curExpLow{i}==0
-%         p4 = plot(curTimecourse,'-','Color', [.5 .5 1]);
-%     end
 end
 
 %% Plots for paper
@@ -275,15 +185,12 @@ figure()
 hold on
 for i = 1:size(curTimecourses,2)
     pr{i} = plot(curTimecourses(1:900,i),'-', 'Color', cmap(i,:), 'LineWidth', .85);
-%     pr{i} = plot(curTimecourses(1:900,i),'-', 'Color', cmap2(i,:), 'LineWidth', .8);
 end
 ylim([-100,100]);
 ylabel('Friendly               Neutral               Conflict','fontsize',14,'Position',[-88 -.000095 -1])
 xlabel('Time (s)','fontsize',14)
 yline(0,'--'); % Plot line at 0
 annotation('doublearrow',[.06 .06],[.1,.93], 'LineWidth',1);
-% legend([pr{1} pr{2} pr{3} pr{4} pr{5} pr{6} pr{7} pr{8} pr{9} pr{10}],...
-%     allGroups, 'Orientation', 'horizontal', 'NumColumns',5)
 legend([pr{1} pr{2} pr{3} pr{4} pr{5} pr{6} pr{7} pr{8} pr{9} pr{10}],...
     allExp, 'NumColumns',2,'fontsize',8,'Position',[0.49,0.75,0.41,0.18])
 
