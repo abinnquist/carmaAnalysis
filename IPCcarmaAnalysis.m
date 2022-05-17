@@ -61,12 +61,11 @@ clearvars count v i lenVid cutoff
 % conversations for difference of condition.
 a = nanmean(controlTC(1:450,:)); b = nanmean(expTC(1:450,:));
 c = nanmean(controlTC(451:900,:)); d = nanmean(expTC(451:900,:));
-%e = nanmean(controlTC(1:900,:)); f = nanmean(expTC(1:900,:));
 
 [~,pvalsHalf(1,1),~,halfStats(1,:)] =ttest2(a,b,'Vartype','unequal'); 
 [~,pvalsHalf(2,1),~,halfStats(2,:)] =ttest2(c,d,'Vartype','unequal'); 
-%[~,pvalsHalf(3,1),~,halfStats(3,:)] =ttest2(e,f,'Vartype','unequal'); 
 
+%To get Cohen's D
 for t=1:2
     n1=30; n2=31;
     if t==1
@@ -90,7 +89,14 @@ a = carmaMeans(controlExp.experimental == 1);
 b = carmaMeans(controlExp.experimental == 0);
 [~, p, ~, stats] = ttest2(a, b);
 
-fprintf('More conflict in the public condition vs the private condition (t = %.3f, p = %.3f)\n',stats.tstat,p)
+%To get Cohen's D
+n1=30; n2=31;
+m1=nanmean(a); m2=nanmean(b);s1=nanvar(a); s2=nanvar(b);   
+pooledSD = sqrt((((n1-1)*s1) + ((n2-1)*s2))/(n1 + n2 - 2));
+cohend = (m1-m2) / pooledSD;  
+
+fprintf('More conflict in the public condition vs the private condition (t = %.3f, p = %.3f, d = %.3f)\n',...
+    stats.tstat,p,cohend)
 
 %% Rearrange dataframe by group, rather than by participant ("halve" the data)
 opts = detectImportOptions('IPCdata_complete.csv');
@@ -121,7 +127,7 @@ rr = (1:height(rankConflict))';
 rr(rankCarmaMeans) = rr;
 rankConflict.rankCarmaMeans = rr;
 rr = (1:height(rankConflict))';
-rankConflict = sortrows(rankConflict, [3]); % Over CARMA average rank
+rankConflict = sortrows(rankConflict, 3); % Over CARMA average rank
 
 %% Plot top conflict CARMA timecourses
 num = 5;
