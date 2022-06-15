@@ -1,4 +1,6 @@
 %% Carma video analysis
+% Will output statistics from the paper in the command window as well as
+% create the figure 4 from the "Zoom Solution" paper.
 % Make sure to run from the 'carmaAnalysis' folder that has helper scripts
 % and data (carmaMeans & IPCdata_complete) stored in it. 
 
